@@ -41,7 +41,7 @@ pip install -r requirements.txt
 
 4. Configure environment variables.
 
-Copy `.env.example` to `.env` or set the variables directly:
+Set the environment variables in `.env`:
 
 ```bash
 set DB_HOST=localhost
