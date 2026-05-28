@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Library Service UI</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; max-width: 900px; }
+    h1, h2 { color: #333; }
+    section { margin-bottom: 24px; padding: 16px; border: 1px solid #ddd; border-radius: 8px; }
+    label { display: block; margin-top: 8px; }
+    input, select, textarea { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; }
+    button { margin-top: 12px; padding: 10px 16px; border: 0; background: #007acc; color: white; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #005ea2; }
+    .response-output { background: #f7f7f7; padding: 12px; border-radius: 6px; border: 1px solid #e1e1e1; max-height: 360px; overflow: auto; white-space: normal; }
+    .response-output table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .response-output th, .response-output td { padding: 8px; border: 1px solid #d8d8d8; text-align: left; vertical-align: top; }
+    .response-output th { background: #f0f0f0; }
+    .inline { display: inline-block; width: 48%; vertical-align: top; }
+    .inline + .inline { margin-left: 4%; }
+  </style>
+</head>
+<body>
+  <h1>Library Service</h1>
+  <p>simple UI to call the library management API endpoints.</p>
+
+  <section>
+    <h2>API Base URL</h2>
+    <label>Host / Port</label>
+    <input id="apiBaseUrl" type="text" value="http://127.0.0.1:5000" />
+  </section>
+
+  <section>
+    <h2>Book Operations</h2>
+    <div class="inline">
+      <label>Search books by title or author</label>
+      <input id="booksAuthor" type="text" placeholder="Author" />
+      <input id="booksTitle" type="text" placeholder="Title" />
+      <button onclick="listBooks()">List Books</button>
+    </div>
+    <div class="inline">
+      <label>Create a new book</label>
+      <input id="bookTitle" type="text" placeholder="Title" />
+      <input id="bookAuthor" type="text" placeholder="Author" />
+      <input id="bookIsbn" type="text" placeholder="ISBN" />
+      <input id="bookPublisher" type="text" placeholder="Publisher" />
+      <input id="bookYear" type="number" placeholder="Publication Year" />
+      <input id="bookTotalCopies" type="number" min="0" placeholder="Total Copies" value="1" />
+      <input id="bookAvailableCopies" type="number" min="0" placeholder="Available Copies" value="1" />
+      <button onclick="createBook()">Create Book</button>
+    </div>
+    <div style="margin-top: 16px;">
+      <label>Book response</label>
+      <div id="booksOutput" class="response-output">Ready.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Member Operations</h2>
+    <div class="inline">
+      <label>Search members by name</label>
+      <input id="membersQuery" type="text" placeholder="name=Alice" />
+      <button onclick="listMembers()">List Members</button>
+    </div>
+    <div class="inline">
+      <label>Create a new member</label>
+      <input id="memberName" type="text" placeholder="Name" />
+      <input id="memberEmail" type="email" placeholder="Email" />
+      <input id="memberPhone" type="text" placeholder="Phone" />
+      <input id="memberAddress" type="text" placeholder="Address" />
+      <button onclick="createMember()">Create Member</button>
+    </div>
+    <div style="margin-top: 16px;">
+      <label>Member response</label>
+      <div id="membersOutput" class="response-output">Ready.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Borrowing Operations</h2>
+    <div class="inline">
+      <label>Create borrowing</label>
+      <input id="borrowMemberId" type="number" min="1" placeholder="Member ID" />
+      <input id="borrowBookId" type="number" min="1" placeholder="Book ID" />
+      <input id="borrowDueDays" type="number" min="1" placeholder="Due days" value="14" />
+      <input id="borrowNotes" type="text" placeholder="Notes (optional)" />
+      <button onclick="borrowBook()">Borrow Book</button>
+    </div>
+    <div class="inline">
+      <label>Return borrowing record</label>
+      <input id="returnBorrowingId" type="number" min="1" placeholder="Borrowing ID" />
+      <button onclick="returnBook()">Return Book</button>
+    </div>
+    <div style="margin-top: 16px;">
+      <label>List borrowings</label>
+      <input id="borrowingsMemberId" type="number" min="1" placeholder="Member ID" />
+      <input id="borrowingsBookId" type="number" min="1" placeholder="Book ID" />
+      <label><input id="borrowingsOutstanding" type="checkbox" /> Outstanding only</label>
+      <button onclick="listBorrowings()">List Borrowings</button>
+    </div>
+    <div style="margin-top: 16px;">
+      <label>Borrowing response</label>
+      <div id="borrowingsOutput" class="response-output">Ready.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Response</h2>
+    <div id="output" class="response-output">Ready.</div>
+  </section>
+
+  <script>
+    function getBaseUrl() {
+      const apiBase = document.getElementById('apiBaseUrl').value.trim();
+      return apiBase ? apiBase.replace(/\/$/, '') : window.location.origin;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function buildTableFromArray(array) {
+      if (!array.length) {
+        return '<div>No results</div>';
+      }
+      const allObjects = array.every(item => item && typeof item === 'object' && !Array.isArray(item));
+      if (!allObjects) {
+        return `<pre>${escapeHtml(JSON.stringify(array, null, 2))}</pre>`;
+      }
+      const columns = [...new Set(array.flatMap(item => Object.keys(item)))];
+      const header = columns.map(col => `<th>${escapeHtml(col)}</th>`).join('');
+      const rows = array.map(item => {
+        const cells = columns.map(col => `<td>${escapeHtml(item[col] === undefined ? '' : item[col])}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+      return `<table><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function buildTableFromObject(obj) {
+      const rows = Object.keys(obj).map(key => {
+        const value = obj[key];
+        const cell = typeof value === 'object' ? escapeHtml(JSON.stringify(value, null, 2)) : escapeHtml(value === undefined ? '' : value);
+        return `<tr><th>${escapeHtml(key)}</th><td>${cell}</td></tr>`;
+      }).join('');
+      return `<table><tbody>${rows}</tbody></table>`;
+    }
+
+    function showOutput(value, targetId = 'output', status) {
+      const out = document.getElementById(targetId);
+      const prefix = status !== undefined ? `<div><strong>Status:</strong> ${escapeHtml(status)}</div>` : '';
+      let content;
+      if (typeof value === 'string') {
+        content = `<div>${escapeHtml(value)}</div>`;
+      } else if (Array.isArray(value)) {
+        content = buildTableFromArray(value);
+      } else if (value && typeof value === 'object') {
+        content = buildTableFromObject(value);
+      } else {
+        content = `<div>${escapeHtml(value)}</div>`;
+      }
+      out.innerHTML = prefix + content;
+    }
+
+    async function apiRequest(path, options = {}, targetId = 'output') {
+      const url = `${getBaseUrl()}${path}`;
+      showOutput('Requesting...', targetId);
+      try {
+        const response = await fetch(url, options);
+        const contentType = response.headers.get('content-type') || '';
+        let data = null;
+        if (contentType.includes('application/json')) {
+          data = await response.json().catch(() => null);
+        } else {
+          data = await response.text().catch(() => null);
+        }
+        if (!response.ok) {
+          const errorText = data && data.error ? data.error : (typeof data === 'string' ? data : JSON.stringify(data));
+          showOutput(errorText || response.statusText, targetId, response.status);
+          throw new Error(errorText || `${response.status} ${response.statusText}`);
+        }
+        showOutput(data === null ? '' : data, targetId, response.status);
+        return data;
+      } catch (error) {
+        showOutput(error.message || 'Request failed', targetId);
+        throw error;
+      }
+    }
+
+    function buildQueryString(text) {
+      if (!text) return '';
+      const params = new URLSearchParams();
+      text.split('&').forEach(pair => {
+        const [key, value] = pair.split('=');
+        if (key && value !== undefined) params.append(key.trim(), value.trim());
+      });
+      return params.toString() ? `?${params.toString()}` : '';
+    }
+
+    async function listBooks() {
+      const author = document.getElementById('booksAuthor').value.trim();
+      const title = document.getElementById('booksTitle').value.trim();
+      const params = new URLSearchParams();
+      if (author) params.append('author', author);
+      if (title) params.append('title', title);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const data = await apiRequest(`/books${query}`, {}, 'booksOutput');
+      showOutput(data, 'booksOutput');
+    }
+
+    async function createBook() {
+      const payload = {
+        title: document.getElementById('bookTitle').value.trim(),
+        author: document.getElementById('bookAuthor').value.trim(),
+        isbn: document.getElementById('bookIsbn').value.trim() || undefined,
+        publisher: document.getElementById('bookPublisher').value.trim() || undefined,
+        publication_year: parseInt(document.getElementById('bookYear').value, 10) || undefined,
+        total_copies: parseInt(document.getElementById('bookTotalCopies').value, 10) || 1,
+        available_copies: parseInt(document.getElementById('bookAvailableCopies').value, 10) || undefined,
+      };
+      if (!payload.title || !payload.author) {
+        showOutput('Title and author are required.', 'booksOutput');
+        return;
+      }
+      const data = await apiRequest('/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }, 'booksOutput');
+      showOutput(data, 'booksOutput');
+    }
+
+    async function listMembers() {
+      const query = buildQueryString(document.getElementById('membersQuery').value);
+      const data = await apiRequest(`/members${query}`, {}, 'membersOutput');
+      showOutput(data, 'membersOutput');
+    }
+
+    async function createMember() {
+      const payload = {
+        name: document.getElementById('memberName').value.trim(),
+        email: document.getElementById('memberEmail').value.trim() || undefined,
+        phone: document.getElementById('memberPhone').value.trim() || undefined,
+        address: document.getElementById('memberAddress').value.trim() || undefined,
+      };
+      if (!payload.name) {
+        showOutput('Member name is required.', 'membersOutput');
+        return;
+      }
+      const data = await apiRequest('/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }, 'membersOutput');
+      showOutput(data, 'membersOutput');
+    }
+
+    async function borrowBook() {
+      const payload = {
+        member_id: parseInt(document.getElementById('borrowMemberId').value, 10),
+        book_id: parseInt(document.getElementById('borrowBookId').value, 10),
+        due_days: parseInt(document.getElementById('borrowDueDays').value, 10) || 14,
+        notes: document.getElementById('borrowNotes').value.trim() || undefined,
+      };
+      if (!payload.member_id || !payload.book_id) {
+        showOutput('Member ID and Book ID are required to borrow a book.', 'borrowingsOutput');
+        return;
+      }
+      const data = await apiRequest('/borrowings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }, 'borrowingsOutput');
+      showOutput(data, 'borrowingsOutput');
+    }
+
+    async function returnBook() {
+      const borrowingId = document.getElementById('returnBorrowingId').value;
+      if (!borrowingId) {
+        showOutput('Enter a borrowing ID to return.', 'borrowingsOutput');
+        return;
+      }
+      const data = await apiRequest(`/borrowings/${borrowingId}/return`, {
+        method: 'POST'
+      }, 'borrowingsOutput');
+      showOutput(data, 'borrowingsOutput');
+    }
+
+    async function listBorrowings() {
+      const memberId = document.getElementById('borrowingsMemberId').value.trim();
+      const bookId = document.getElementById('borrowingsBookId').value.trim();
+      const outstanding = document.getElementById('borrowingsOutstanding').checked;
+      const params = new URLSearchParams();
+      if (memberId) params.append('member_id', memberId);
+      if (bookId) params.append('book_id', bookId);
+      if (outstanding) params.append('outstanding', 'true');
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const data = await apiRequest(`/borrowings${query}`, {}, 'borrowingsOutput');
+      showOutput(data, 'borrowingsOutput');
+    }
+  </script>
+</body>
+</html>
